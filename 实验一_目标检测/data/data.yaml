@@ -1,0 +1,11 @@
+path: .
+train: images/train
+val: images/val
+test: images/test
+
+nc: 4
+names:
+  0: bottle
+  1: cup
+  2: book
+  3: cell phone
