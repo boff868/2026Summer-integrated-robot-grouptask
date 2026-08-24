@@ -43,8 +43,14 @@ python3 tools/extract_coco_desktop.py \
 ## 训练命令
 
 ```bash
+# 一键训练（自动检测 GPU/CPU，用 COCO 预训练权重）
+python3 train/train.py --data data/data.yaml
+
+# 或者直接命令行
 yolo detect train data=data/data.yaml model=yolov8n.pt epochs=150 imgsz=640
 ```
+
+训练结果在 `runs/desktop_train/weights/best.pt`，训练脚本会自动在测试集上评估并输出 mAP50。
 
 ## 目录结构
 
@@ -52,6 +58,9 @@ yolo detect train data=data/data.yaml model=yolov8n.pt epochs=150 imgsz=640
 实验一_目标检测/
 ├── tools/
 │   └── extract_coco_desktop.py   # 数据提取脚本（COCO → YOLO，含桌子过滤/类别筛选/数据划分）
+├── train/
+│   ├── train.py                  # 训练脚本（自动检测GPU/CPU，训练+测试集评估）
+│   └── train.sh                  # 一键训练（自动装依赖）
 └── data/
     ├── data.yaml                 # 训练配置（相对路径，可直接使用）
     ├── images/{train,val,test}/  # 图片
