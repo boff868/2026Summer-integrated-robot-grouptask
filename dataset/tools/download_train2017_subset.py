@@ -40,6 +40,8 @@ def parse_args():
     p.add_argument("--workers", type=int, default=16, help="并发下载线程数")
     p.add_argument("--base-url", default=BASE_URL, help="图片基础URL")
     p.add_argument("--dry-run", action="store_true", help="只统计不下载")
+    p.add_argument("--classes", default=None,
+                   help="只保留的类别，逗号分隔，如 'laptop,cell phone,clock'（默认全部6类）")
     p.add_argument("--single-object", action="store_true",
                    help="只下载\"单物体\"图片（与提取脚本 --single-object 配套）")
     p.add_argument("--min-area-ratio", type=float, default=None,
@@ -56,8 +58,18 @@ def main():
     with open(args.annotations, encoding="utf-8") as f:
         data = json.load(f)
 
+    # 可选：限定类别子集（保持 TARGET_CLASSES 顺序）
+    if args.classes:
+        wanted = [c.strip() for c in args.classes.split(",")]
+        unknown = [c for c in wanted if c not in TARGET_CLASSES]
+        if unknown:
+            print(f"错误: 未知类别 {unknown}，可选: {TARGET_CLASSES}")
+            return
+        TARGET_CLASSES[:] = [c for c in TARGET_CLASSES if c in wanted]
+        print(f"==> 限定类别 ({len(TARGET_CLASSES)} 类): {TARGET_CLASSES}")
+
     cat_name_to_id = {c["name"]: c["id"] for c in data["categories"]}
-    target_ids = {cat_name_to_id[n] for n in TARGETS if n in cat_name_to_id}
+    target_ids = {cat_name_to_id[n] for n in TARGET_CLASSES if n in cat_name_to_id}
     table_id = cat_name_to_id[TABLE_NAME]
 
     img_file = {img["id"]: img["file_name"] for img in data["images"]}

@@ -72,6 +72,8 @@ def parse_args():
     p.add_argument("--per-class", type=int, default=183, help="每类最多取多少张图片")
     p.add_argument("--min-per-class", type=int, default=30, help="类别最少图片数，不足自动丢弃")
     p.add_argument("--min-classes", type=int, default=4, help="至少保留的类别数")
+    p.add_argument("--classes", default=None,
+                   help="只保留的类别，逗号分隔，如 'laptop,cell phone,clock'（默认全部6类）")
     p.add_argument("--single-object", action="store_true",
                    help="只保留\"单物体\"图片（图中只有一个目标物体实例，场景更干净，acc 通常更高）")
     p.add_argument("--min-area-ratio", type=float, default=None,
@@ -118,6 +120,16 @@ def load_coco(ann_path):
 def main():
     args = parse_args()
     random.seed(args.seed)
+
+    # 可选：限定类别子集（在读取标注前生效，保持 TARGET_CLASSES 顺序）
+    if args.classes:
+        wanted = [c.strip() for c in args.classes.split(",")]
+        unknown = [c for c in wanted if c not in TARGET_CLASSES]
+        if unknown:
+            print(f"错误: 未知类别 {unknown}，可选: {TARGET_CLASSES}")
+            exit(1)
+        TARGET_CLASSES[:] = [c for c in TARGET_CLASSES if c in wanted]
+        print(f"==> 限定类别 ({len(TARGET_CLASSES)} 类): {TARGET_CLASSES}")
     tr, va, te = [float(x) for x in args.split.split(",")]
     if abs(tr + va + te - 1.0) > 1e-6:
         print("错误：划分比例之和必须等于 1")
