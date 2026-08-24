@@ -59,6 +59,12 @@ def main():
             device = "mps"  # Apple Silicon (M系列芯片) 加速
         else:
             device = "cpu"
+
+    # MPS 尚未实现 torchvision::nms 等算子，开启官方推荐的 CPU 回退
+    if device == "mps":
+        os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
+        print("==> 已开启 PYTORCH_ENABLE_MPS_FALLBACK=1（MPS 不支持的算子自动回退 CPU）")
+
     print(f"==> 训练设备: {device}")
 
     # ---- 默认参数（按设备自动调整）----
