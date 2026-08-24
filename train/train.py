@@ -53,16 +53,21 @@ def main():
     # ---- 设备 ----
     device = args.device
     if device is None:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.is_available():
+            device = "cuda"
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            device = "mps"  # Apple Silicon (M系列芯片) 加速
+        else:
+            device = "cpu"
     print(f"==> 训练设备: {device}")
 
     # ---- 默认参数（按设备自动调整）----
     if args.epochs is None:
-        args.epochs = 150 if device.startswith("cuda") else 80
+        args.epochs = 150 if device.startswith("cuda") else (100 if device == "mps" else 80)
     if args.imgsz is None:
-        args.imgsz = 640 if device.startswith("cuda") else 416
+        args.imgsz = 640 if device in ("cuda", "mps") else 416
     if args.batch is None:
-        args.batch = 16 if device.startswith("cuda") else 8
+        args.batch = 16 if device in ("cuda", "mps") else 8
 
     # ---- 数据加载进程数 ----
     if args.workers is None:
