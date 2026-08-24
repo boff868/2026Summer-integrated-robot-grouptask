@@ -54,6 +54,9 @@ yolo detect train data=data.yaml model=yolov8n.pt epochs=150 imgsz=640
 
 训练结果在 `runs/desktop_train/weights/best.pt`（相对运行目录），训练脚本会自动在测试集上评估并输出 mAP50。
 
+> ⚠️ **路径说明**：ultralytics 的相对路径基于"运行命令时的目录"解析，推荐在 `train/` 或 `dataset/` 目录下运行上面的命令。
+> 如果把 `dataset/` 文件夹单独拷贝到其他位置（如虚拟机的 `/root/dataset`），请把 `data.yaml` 里的 `path` 改成绝对路径（如 `path: /root/dataset`）。
+
 ## 目录结构
 
 ```

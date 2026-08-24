@@ -1,4 +1,9 @@
-path: .
+# 注意：ultralytics 的相对路径是基于【运行命令时的目录】解析的。
+# - 从 train/ 目录运行: path=../dataset  ->  仓库根/dataset  ✅
+# - 从 dataset/ 目录运行: path=../dataset  ->  仓库根/dataset  ✅
+# 如果把这个 dataset 文件夹单独拷贝到其他位置（如虚拟机的 /root/dataset），
+# 请把 path 改成绝对路径，例如: path: /root/dataset
+path: ../dataset
 train: images/train
 val: images/val
 test: images/test
