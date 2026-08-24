@@ -20,6 +20,7 @@
 
 import argparse
 import os
+import shutil
 
 import torch
 from ultralytics import YOLO
@@ -27,10 +28,11 @@ from ultralytics import YOLO
 
 def parse_args():
     p = argparse.ArgumentParser(description="YOLOv8 桌面物品检测训练")
-    p.add_argument("--data", default=None, help="data.yaml 路径（默认自动找 ../data/data.yaml）")
+    p.add_argument("--data", default=None, help="data.yaml 路径（默认自动找 ../dataset/data.yaml）")
     p.add_argument("--epochs", type=int, default=None, help="训练轮数")
     p.add_argument("--imgsz", type=int, default=None, help="输入图片尺寸")
     p.add_argument("--batch", type=int, default=None, help="batch size")
+    p.add_argument("--workers", type=int, default=None, help="数据加载进程数（Docker 容器建议 <=2）")
     p.add_argument("--device", default=None, help="cuda / cpu / 0 / 1 ...（默认自动检测）")
     return p.parse_args()
 
@@ -62,8 +64,20 @@ def main():
     if args.batch is None:
         args.batch = 16 if device.startswith("cuda") else 8
 
+    # ---- 数据加载进程数 ----
+    if args.workers is None:
+        # Docker 容器默认 /dev/shm 只有 64MB，多进程数据加载会撑爆共享内存（Bus error）
+        # 检测到共享内存 < 2GB 时自动降为 2 个进程
+        try:
+            shm_total = shutil.disk_usage("/dev/shm").total
+            args.workers = 2 if shm_total < 2 * 1024**3 else 8
+            print(f"==> DataLoader workers: {args.workers}（/dev/shm 大小: {shm_total / 1024**3:.1f}GB）")
+        except OSError:
+            args.workers = 8
+            print("==> DataLoader workers: 8（未检测到 /dev/shm 限制）")
+
     print(f"==> 数据集: {data}")
-    print(f"==> 参数: epochs={args.epochs}, imgsz={args.imgsz}, batch={args.batch}")
+    print(f"==> 参数: epochs={args.epochs}, imgsz={args.imgsz}, batch={args.batch}, workers={args.workers}")
 
     # ---- 加载 COCO 预训练权重（数据量小，必须从预训练开始）----
     model = YOLO("yolov8n.pt")
@@ -74,6 +88,7 @@ def main():
         epochs=args.epochs,
         imgsz=args.imgsz,
         batch=args.batch,
+        workers=args.workers,
         device=device,
         patience=30,        # 验证集连续30轮无提升自动停止
         pretrained=True,
