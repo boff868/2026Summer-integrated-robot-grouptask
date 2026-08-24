@@ -40,6 +40,12 @@ def parse_args():
     p.add_argument("--workers", type=int, default=16, help="并发下载线程数")
     p.add_argument("--base-url", default=BASE_URL, help="图片基础URL")
     p.add_argument("--dry-run", action="store_true", help="只统计不下载")
+    p.add_argument("--single-object", action="store_true",
+                   help="只下载\"单物体\"图片（与提取脚本 --single-object 配套）")
+    p.add_argument("--min-area-ratio", type=float, default=None,
+                   help="只下载物体面积占比≥该值的图片（与提取脚本 --min-area-ratio 配套）")
+    p.add_argument("--no-require-table", dest="require_table", action="store_false",
+                   default=True, help="关闭桌子过滤（默认开启）")
     return p.parse_args()
 
 
@@ -55,7 +61,8 @@ def main():
     table_id = cat_name_to_id[TABLE_NAME]
 
     img_file = {img["id"]: img["file_name"] for img in data["images"]}
-    img_target = {}      # image_id -> {category_id,...}
+    img_wh = {img["id"]: (img["width"], img["height"]) for img in data["images"]}
+    img_ann = {}       # image_id -> [(category_id, area_ratio), ...]
     img_has_table = set()
 
     for ann in data["annotations"]:
@@ -64,15 +71,33 @@ def main():
         if cid == table_id:
             img_has_table.add(iid)
         elif cid in target_ids:
-            img_target.setdefault(iid, set()).add(cid)
+            w, h = img_wh.get(iid, (1, 1))
+            bw, bh = ann["bbox"][2], ann["bbox"][3]
+            img_ann.setdefault(iid, []).append((cid, (bw * bh) / (w * h)))
 
-    # 需要下载的图片 = 同时含目标类别 和 桌子
-    need = {iid for iid in img_target if iid in img_has_table}
+    def kept_anns(iid):
+        """应用面积过滤后剩余的标注"""
+        anns = img_ann[iid]
+        if args.min_area_ratio is not None:
+            anns = [a for a in anns if a[1] >= args.min_area_ratio]
+        return anns
+
+    # 需要下载的图片 = 通过全部过滤条件（与提取脚本逻辑一致）
+    need = set()
+    for iid in img_ann:
+        if args.require_table and iid not in img_has_table:
+            continue
+        kept = kept_anns(iid)
+        if not kept:
+            continue
+        if args.single_object and len(kept) != 1:
+            continue
+        need.add(iid)
 
     name_by_id = {c["id"]: c["name"] for c in data["categories"]}
     per_class = Counter()
     for iid in need:
-        for cid in img_target[iid]:
+        for cid, _ in kept_anns(iid):
             per_class[cid] += 1
 
     print(f"      需要下载的图片: {len(need)} 张")

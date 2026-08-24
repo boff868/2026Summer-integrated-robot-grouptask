@@ -74,6 +74,8 @@ def parse_args():
     p.add_argument("--min-classes", type=int, default=4, help="至少保留的类别数")
     p.add_argument("--single-object", action="store_true",
                    help="只保留\"单物体\"图片（图中只有一个目标物体实例，场景更干净，acc 通常更高）")
+    p.add_argument("--min-area-ratio", type=float, default=None,
+                   help="只保留物体面积占比≥该值的标注（如 0.1=物体占图10%以上，画面更干净更好学）")
     p.add_argument("--no-require-table", dest="require_table", action="store_false",
                    default=True, help="关闭桌子过滤（默认开启）")
     p.add_argument("--split", default="0.8,0.1,0.1", help="train,val,test 划分比例")
@@ -136,6 +138,20 @@ def main():
         img_boxes = {iid: boxes for iid, boxes in img_boxes.items() if iid in img_has_table}
         print(f"      [桌子过滤] 含桌子的图片 {len(img_has_table)} 张；"
               f"目标物体在桌边场景的图片: {before} -> {len(img_boxes)}")
+
+    # ---- 大物体过滤：只保留物体面积占比达标的标注（画面干净，更好学）----
+    if args.min_area_ratio:
+        before = sum(len(v) for v in img_boxes.values())
+        img_wh = {iid: (meta["width"], meta["height"]) for iid, meta in img_meta.items()}
+        new_boxes = {}
+        for iid, boxes in img_boxes.items():
+            w, h = img_wh[iid]
+            keep = [b for b in boxes if (b[1][2] * b[1][3]) / (w * h) >= args.min_area_ratio]
+            if keep:
+                new_boxes[iid] = keep
+        img_boxes = new_boxes
+        after = sum(len(v) for v in img_boxes.values())
+        print(f"      [大物体过滤] 面积占比≥{args.min_area_ratio:.0%}: 标注 {before} -> {after}")
 
     # ---- 单物体过滤：每张图只保留一个目标物体实例 ----
     if args.single_object:
