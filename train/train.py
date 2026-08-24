@@ -4,7 +4,7 @@
 实验一：目标检测与识别 —— 模型训练脚本
 ========================================
 - 模型：YOLOv8n（nano 轻量版，便于后续部署到 Jetson 并满足 >=5 FPS）
-- 数据：默认 ../data/data.yaml，可用 --data 指定（如 /root/desktop6/data.yaml）
+- 数据：默认 ../dataset/data.yaml，可用 --data 指定（如 /root/desktop6/data.yaml）
 - 设备：自动检测 GPU / CPU
     * GPU:  imgsz=640, epochs=150, batch=16
     * CPU:  imgsz=416, epochs=80,  batch=8   （虚拟机无 GPU 时自动变小，避免跑太久）
@@ -40,7 +40,7 @@ def main():
 
     # ---- 数据集路径 ----
     data = args.data or os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "..", "data", "data.yaml"
+        os.path.dirname(os.path.abspath(__file__)), "..", "dataset", "data.yaml"
     )
     data = os.path.abspath(data)
     if not os.path.exists(data):
