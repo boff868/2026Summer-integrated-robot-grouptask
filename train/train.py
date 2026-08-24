@@ -29,13 +29,10 @@ from ultralytics import YOLO
 def parse_args():
     p = argparse.ArgumentParser(description="YOLOv8 桌面物品检测训练")
     p.add_argument("--data", default=None, help="data.yaml 路径（默认自动找 ../dataset/data.yaml）")
-    p.add_argument("--model", default="yolov8n.pt", help="模型权重：yolov8n/s/m/l 或本地 .pt 路径")
     p.add_argument("--epochs", type=int, default=None, help="训练轮数")
     p.add_argument("--imgsz", type=int, default=None, help="输入图片尺寸")
     p.add_argument("--batch", type=int, default=None, help="batch size")
     p.add_argument("--workers", type=int, default=None, help="数据加载进程数（Docker 容器建议 <=2）")
-    p.add_argument("--patience", type=int, default=30, help="早停耐心轮数（0=关闭早停）")
-    p.add_argument("--mixup", type=float, default=None, help="mixup 数据增强强度（如 0.1）")
     p.add_argument("--device", default=None, help="cuda / cpu / 0 / 1 ...（默认自动检测）")
     return p.parse_args()
 
@@ -93,26 +90,22 @@ def main():
     print(f"==> 数据集: {data}")
     print(f"==> 参数: epochs={args.epochs}, imgsz={args.imgsz}, batch={args.batch}, workers={args.workers}")
 
-    # ---- 加载预训练权重（数据量小，必须从预训练开始）----
-    print(f"==> 模型: {args.model}")
-    model = YOLO(args.model)
+    # ---- 加载 COCO 预训练权重（数据量小，必须从预训练开始）----
+    model = YOLO("yolov8n.pt")
 
     # ---- 训练 ----
-    train_kwargs = dict(
+    model.train(
         data=data,
         epochs=args.epochs,
         imgsz=args.imgsz,
         batch=args.batch,
         workers=args.workers,
         device=device,
-        patience=args.patience,   # 早停耐心轮数
+        patience=30,        # 验证集连续30轮无提升自动停止
         pretrained=True,
         project="runs",
         name="desktop_train",
     )
-    if args.mixup is not None:
-        train_kwargs["mixup"] = args.mixup   # mixup 数据增强
-    model.train(**train_kwargs)
 
     # ---- 在测试集上评估（输出 mAP50 / mAP50-95，写报告要用）----
     print("==> 训练完成，用 best.pt 在测试集上评估...")
