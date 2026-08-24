@@ -72,6 +72,8 @@ def parse_args():
     p.add_argument("--per-class", type=int, default=183, help="每类最多取多少张图片")
     p.add_argument("--min-per-class", type=int, default=30, help="类别最少图片数，不足自动丢弃")
     p.add_argument("--min-classes", type=int, default=4, help="至少保留的类别数")
+    p.add_argument("--single-object", action="store_true",
+                   help="只保留\"单物体\"图片（图中只有一个目标物体实例，场景更干净，acc 通常更高）")
     p.add_argument("--no-require-table", dest="require_table", action="store_false",
                    default=True, help="关闭桌子过滤（默认开启）")
     p.add_argument("--split", default="0.8,0.1,0.1", help="train,val,test 划分比例")
@@ -134,6 +136,12 @@ def main():
         img_boxes = {iid: boxes for iid, boxes in img_boxes.items() if iid in img_has_table}
         print(f"      [桌子过滤] 含桌子的图片 {len(img_has_table)} 张；"
               f"目标物体在桌边场景的图片: {before} -> {len(img_boxes)}")
+
+    # ---- 单物体过滤：每张图只保留一个目标物体实例 ----
+    if args.single_object:
+        before = len(img_boxes)
+        img_boxes = {iid: boxes for iid, boxes in img_boxes.items() if len(boxes) == 1}
+        print(f"      [单物体过滤] 只保留\"图中只有一个目标物体\"的图片: {before} -> {len(img_boxes)}")
 
     # ---- 类别筛选：自动丢弃图片不足的类别 ----
     cand_counts = Counter()
