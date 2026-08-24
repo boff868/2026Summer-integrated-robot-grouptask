@@ -208,6 +208,7 @@ def main():
 
     # ---- 生成 YOLO 格式数据集 ----
     print(f"[4/4] 生成 YOLO 数据集 -> {args.out_dir}")
+    missing_total = 0
     for split_name in splits:
         img_out = os.path.join(args.out_dir, "images", split_name)
         lbl_out = os.path.join(args.out_dir, "labels", split_name)
@@ -219,7 +220,9 @@ def main():
             src = os.path.join(args.images_dir, meta["file_name"])
             dst = os.path.join(img_out, meta["file_name"])
             if not os.path.exists(src):
-                print(f"      ⚠️ 图片缺失，跳过: {src}")
+                missing_total += 1
+                if missing_total <= 10:
+                    print(f"      ⚠️ 图片缺失，跳过: {src}")
                 continue
             shutil.copyfile(src, dst)
 
@@ -235,6 +238,11 @@ def main():
             lbl_path = os.path.join(lbl_out, os.path.splitext(meta["file_name"])[0] + ".txt")
             with open(lbl_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(lines))
+
+    if missing_total:
+        print(f"⚠️ 共 {missing_total} 张图片缺失！请先运行 download_train2017_subset.py 补下载后重新提取")
+    else:
+        print("✅ 图片全部找到，无缺失")
 
     # ---- data.yaml ----
     yaml_path = os.path.join(args.out_dir, "data.yaml")

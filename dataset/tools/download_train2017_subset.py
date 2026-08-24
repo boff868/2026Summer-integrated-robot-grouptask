@@ -25,8 +25,11 @@ import urllib.request
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# 与提取脚本共用同一份类别列表，避免两边不一致导致图片缺失
+from extract_coco_desktop import TARGET_CLASSES
+
 BASE_URL = "http://images.cocodataset.org/train2017/"
-TARGETS = {"bottle", "cup", "book", "cell phone"}
+TARGETS = set(TARGET_CLASSES)
 TABLE_NAME = "dining table"
 
 
