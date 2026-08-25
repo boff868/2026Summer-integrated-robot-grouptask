@@ -8,9 +8,11 @@ train: images/train
 val: images/val
 test: images/test
 
-nc: 4
+nc: 6
 names:
   0: bottle
   1: cup
   2: book
-  3: cell phone
+  3: clock
+  4: cell phone
+  5: laptop

@@ -1,43 +1,55 @@
 # 实验一：目标检测与识别 —— 桌面物品数据集
 
-基于 COCO2017 **val2017** 构建的"桌面物品"目标检测数据集，共 **280 张图片、4 类物体**，
+基于 COCO2017 **train2017** 构建的"桌面物品"目标检测数据集（v2 易训练版），共 **6 类物体、约 2300 张图片**，
 已转换为 YOLO 格式并按 **8:1:1** 划分为 train / val / test。
 
-## 类别与数量
+## 类别与数量（每类最多取 400 张）
 
-| 类别 | YOLO编号 | train | val | test | 合计 |
-|---|---|---|---|---|---|
-| bottle 水瓶 | 0 | 94 | 11 | 15 | 120 |
-| cup 杯子 | 1 | 151 | 16 | 20 | 187 |
-| book 书 | 2 | 38 | 6 | 3 | 47 |
-| cell phone 手机 | 3 | 24 | 5 | 2 | 31 |
+| 类别 | YOLO编号 | 数量 | 说明 |
+|---|---|---|---|
+| bottle 水瓶 | 0 | 400 | ✅ 达到上限 |
+| cup 杯子 | 1 | 400 | ✅ 达到上限 |
+| book 书 | 2 | 400 | ✅ 达到上限 |
+| clock 时钟 | 3 | 400 | ✅ 达到上限 |
+| cell phone 手机 | 4 | 364 | ⚠️ 候选不足400 |
+| laptop 笔记本 | 5 | 400 | ✅ 达到上限 |
 
-- 图片总数：280 张（train 224 / val 28 / test 28）
-- 标注实例总数：1135 个
-- 所有图片均为"目标物体出现在餐桌上（dining table）"的场景，符合"识别桌上物品"的实验要求
+- 图片总数：约 **2364 张**（train / val / test = 8:1:1）
+- 数据筛选策略（"易训练"过滤）：
+  - **单物体过滤**：每张图只保留"图中只有一个目标物体"的图片 → 背景干净，模型容易学，acc 高
+  - **大物体过滤**：物体面积占画面 ≥ 10% → 特征清晰
+  - 不强制要求桌子（否则手机、时钟类图片会严重不足）
+- 实验验收要求 ≥ 2 类，本数据集 6 类，满足要求
 
 ## 生成流程
 
-1. 下载 COCO2017 val2017（图片 + 标注）
-2. **桌子过滤**：只保留同时含有 `dining table` 标注的图片，确保物体都在桌面上
-3. **类别筛选**：候选图片数 < 30 的类别自动丢弃（最终保留 4 类）
-4. 每类最多取 183 张，转换为 YOLO 格式标注（`class_id cx cy w h`，归一化）
+1. 下载 COCO2017 train2017 的标注文件（`annotations_trainval2017.zip`）
+2. 用 `download_train2017_subset.py` **按需下载**"单物体 + 大物体"的目标图片（约 1~2GB，跳过 18GB 整包下载）
+3. **类别筛选**：候选图片数 < 100 的类别自动丢弃
+4. 每类最多取 400 张，转换为 YOLO 格式标注（`class_id cx cy w h`，归一化）
 5. 全局随机划分 **8:1:1**，并保证每个类别在 train / val / test 中都有样本
 
 ## 复现步骤
 
 ```bash
-# 1. 下载 COCO val2017
-#    图片: http://images.cocodataset.org/zips/val2017.zip     (~1GB)
+# 1. 下载标注文件
 #    标注: http://images.cocodataset.org/annotations/annotations_trainval2017.zip  (~250MB)
+#    解压后得到 instances_train2017.json
 
-# 2. 运行提取脚本（在解压目录的同级执行）
+# 2. 只下载需要的图片（约1~2GB，替代18GB整包）
+python3 tools/download_train2017_subset.py \
+    --annotations instances_train2017.json \
+    --out-dir train2017_easy \
+    --no-require-table --single-object --min-area-ratio 0.1 \
+    --workers 16
+
+# 3. 提取数据集（自动过滤 + 类别筛选 + 数据划分）
 python3 tools/extract_coco_desktop.py \
-    --annotations instances_val2017.json \
-    --images-dir  val2017 \
-    --out-dir     desktop6 \
-    --per-class   183 \
-    --min-per-class 30
+    --annotations instances_train2017.json \
+    --images-dir  train2017_easy \
+    --out-dir     dataset \
+    --per-class 400 --min-per-class 100 \
+    --no-require-table --single-object --min-area-ratio 0.1
 ```
 
 ## 训练命令
@@ -45,17 +57,14 @@ python3 tools/extract_coco_desktop.py \
 训练代码在仓库的 `train/` 目录，从这里运行：
 
 ```bash
-# 一键训练（自动检测 GPU/CPU，用 COCO 预训练权重）
-python3 ../train/train.py --data data.yaml
+cd ../train
+python3 train.py --data ../dataset/data.yaml
 
-# 或者直接命令行
-yolo detect train data=data.yaml model=yolov8n.pt epochs=150 imgsz=640
+# 或直接命令行（yolov8s 时注意 batch 调小防显存溢出）
+yolo detect train data=../dataset/data.yaml model=yolov8s.pt epochs=300 imgsz=640 batch=8 patience=60 mixup=0.1
 ```
 
-训练结果在 `runs/desktop_train/weights/best.pt`（相对运行目录），训练脚本会自动在测试集上评估并输出 mAP50。
-
-> ⚠️ **路径说明**：ultralytics 的相对路径基于"运行命令时的目录"解析，推荐在 `train/` 或 `dataset/` 目录下运行上面的命令。
-> 如果把 `dataset/` 文件夹单独拷贝到其他位置（如虚拟机的 `/root/dataset`），请把 `data.yaml` 里的 `path` 改成绝对路径（如 `path: /root/dataset`）。
+> ⚠️ **路径说明**：`data.yaml` 的 `path: ../dataset` 是相对路径，从 `train/` 或 `dataset/` 目录运行均正确；若把 `dataset/` 单独拷贝到其他位置（如虚拟机的 `/root/dataset`），请把 `path` 改为绝对路径。
 
 ## 目录结构
 
@@ -64,11 +73,12 @@ yolo detect train data=data.yaml model=yolov8n.pt epochs=150 imgsz=640
 ├── dataset/                        # 本目录
 │   ├── README.md                   # 数据集说明
 │   ├── tools/
-│   │   └── extract_coco_desktop.py # 数据提取脚本（COCO → YOLO，含桌子过滤/类别筛选/数据划分）
-│   ├── data.yaml                   # 训练配置（相对路径，可直接使用）
+│   │   ├── extract_coco_desktop.py          # 数据提取脚本（过滤/筛选/划分）
+│   │   └── download_train2017_subset.py     # 按需下载脚本（只下需要的图片）
+│   ├── data.yaml                   # 训练配置（相对路径）
 │   ├── images/{train,val,test}/    # 图片
 │   └── labels/{train,val,test}/    # YOLO 标注（与图片同名 .txt）
 └── train/                          # 训练代码
-    ├── train.py                    # 训练脚本（自动检测GPU/CPU，训练+测试集评估）
-    └── train.sh                    # 一键训练（自动装依赖）
+    ├── train.py                    # 训练脚本（自动检测GPU/CPU，训练完自动评估）
+    └── train.sh                    # 一键训练
 ```
