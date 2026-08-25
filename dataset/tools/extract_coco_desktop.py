@@ -273,7 +273,7 @@ def main():
                 lines.append(f"{ci} {xc:.6f} {yc:.6f} {wn:.6f} {hn:.6f}")
             lbl_path = os.path.join(lbl_out, os.path.splitext(meta["file_name"])[0] + ".txt")
             with open(lbl_path, "w", encoding="utf-8") as f:
-                f.write("\n".join(lines))
+                f.write("\n".join(lines) + "\n")  # 末尾换行，避免 cat 拼接时合并成一行
 
     if missing_total:
         print(f"⚠️ 共 {missing_total} 张图片缺失！请先运行 download_train2017_subset.py 补下载后重新提取")
