@@ -12,6 +12,8 @@
 ├── dataset_self/              # 自拍数据集（keyboard/nongfu_spring/phone）
 │   ├── README.md / data.yaml
 │   └── train/  valid/  test/  # 各含 images/ + labels/
+├── models/
+│   └── best_gjs_1.pt          # 最终训练权重（供 Jetson 部署 / ROS2 节点使用）
 ├── train/
 │   ├── train.py / train.sh    # 基础训练脚本（自动检测 GPU/CPU）
 │   ├── train_simple.sh        # 当前使用的训练脚本（YOLOv8m + 强增强）
@@ -46,6 +48,7 @@ bash train/train_simple.sh
 
 - 验证集：mAP50 = **0.944**（Precision 0.938 / Recall 0.914）
 - 测试集：conf=0.5 时整体正确识别率 **0.925**（≥ 80% 验收线）
+- 最终模型权重：[models/best_gjs_1.pt](models/best_gjs_1.pt)（可直接用于 Jetson 部署与 ROS2 节点）
 
 详见 [results.md](results.md)。
 
