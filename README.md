@@ -12,12 +12,14 @@
 ├── dataset_self/              # 自拍数据集（keyboard/nongfu_spring/phone）
 │   ├── README.md / data.yaml
 │   └── train/  valid/  test/  # 各含 images/ + labels/
-└── train/
-    ├── train.py / train.sh    # 基础训练脚本（自动检测 GPU/CPU）
-    ├── train_simple.sh        # 当前使用的训练脚本（YOLOv8m + 强增强）
-    ├── eval_predict.py        # 预测结果 vs 真值评估脚本（IoU>=0.5）
-    ├── fix_labels.py          # 标签规范化工具（多边形转方框）
-    └── downscale_dataset.py   # 图片压缩工具（GitHub 上传前用）
+├── train/
+│   ├── train.py / train.sh    # 基础训练脚本（自动检测 GPU/CPU）
+│   ├── train_simple.sh        # 当前使用的训练脚本（YOLOv8m + 强增强）
+│   ├── eval_predict.py        # 预测结果 vs 真值评估脚本（IoU>=0.5）
+│   ├── fix_labels.py          # 标签规范化工具（多边形转方框）
+│   └── downscale_dataset.py   # 图片压缩工具（GitHub 上传前用）
+└── ros2/
+    └── yolo_detector_node.py  # ROS2 检测结果发布节点
 ```
 
 ## 数据集
@@ -47,8 +49,20 @@ bash train/train_simple.sh
 
 详见 [results.md](results.md)。
 
+## ROS2 发布
+
+`ros2/yolo_detector_node.py`：摄像头实时采集 → YOLOv8 推理 → 检测结果以 JSON 发布到 ROS2 话题，同时弹窗显示标注画面（框 / 类别 / 置信度 / FPS）。
+
+- 发布话题：`/detections/json`（std_msgs/String）
+- JSON 结构：`{"fps": 12.5, "object_count": 2, "objects": [{"class_id": 0, "class_name": "keyboard", "confidence": 0.91, "bbox": {"x1": 10, "y1": 20, "x2": 200, "y2": 300}}, ...]}`
+- 运行：
+  ```bash
+  python3 ros2/yolo_detector_node.py --ros-args \
+      -p model_path:=/home/nvidia/best_gjs_1.pt -p camera_id:=2 -p conf:=0.7
+  ```
+- 说明：类别名自动从模型读取；FP16 半精度推理（Jetson 友好）；画面窗口内按 q 退出
+
 ## 后续工作
 
 - Jetson 部署：ONNX → TensorRT → 摄像头实时识别（目标 ≥5 FPS）
-- ROS2 发布识别结果（类别、检测框、置信度）
 - 实机验收：20 个物体正确识别率 ≥ 80%，保存测试结果与错误案例
