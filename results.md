@@ -2,9 +2,9 @@
 
 ## 训练配置
 
-- 模型：YOLOv8s（11.1M 参数，fused 后 73 层）
+- 模型：YOLOv8s（11.1M 参数）
 - 输入尺寸：640×640
-- 数据：3 类桌面物体（keyboard / nongfu_spring / phone），融合训练流程见 README
+- 数据：自拍数据集（keyboard / nongfu_spring / phone）
 - 训练：400 epochs 上限，第 108 轮早停收敛（约 0.37 小时，RTX 4060 8GB）
 - 数据增强：mixup=0.2、mosaic=1.0（最后 20 轮关闭）、degrees=10、translate=0.15、scale=0.5、shear=5、HSV 扰动、fliplr=0.5
 

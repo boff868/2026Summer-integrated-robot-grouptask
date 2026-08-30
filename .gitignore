@@ -3,4 +3,3 @@ __pycache__/
 *.pyc
 train/runs/
 models/
-dataset_fused/

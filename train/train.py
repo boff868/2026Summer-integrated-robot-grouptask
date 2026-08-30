@@ -4,15 +4,15 @@
 实验一：目标检测与识别 —— 模型训练脚本
 ========================================
 - 模型：YOLOv8n（nano 轻量版，便于后续部署到 Jetson 并满足 >=5 FPS）
-- 数据：默认 ../dataset/data.yaml，可用 --data 指定（如 /root/desktop6/data.yaml）
-- 设备：自动检测 GPU / CPU
+- 数据：默认 ../dataset_self/data.yaml，可用 --data 指定（如 /root/dataset_XBY/data.yaml）
+- 设备：自动检测 GPU / CPU / MPS
     * GPU:  imgsz=640, epochs=150, batch=16
     * CPU:  imgsz=416, epochs=80,  batch=8   （虚拟机无 GPU 时自动变小，避免跑太久）
 - 训练结果：runs/desktop_train/weights/best.pt
 
 用法：
-    python3 train.py --data /root/desktop6/data.yaml        # 用默认参数
-    python3 train.py --data /root/desktop6/data.yaml --epochs 200 --imgsz 640 --batch 16
+    python3 train.py                                        # 用默认参数（自拍数据集）
+    python3 train.py --data /root/dataset_XBY/data.yaml --epochs 200 --imgsz 640 --batch 16
 
 依赖：
     pip install ultralytics
@@ -28,7 +28,7 @@ from ultralytics import YOLO
 
 def parse_args():
     p = argparse.ArgumentParser(description="YOLOv8 桌面物品检测训练")
-    p.add_argument("--data", default=None, help="data.yaml 路径（默认自动找 ../dataset/data.yaml）")
+    p.add_argument("--data", default=None, help="data.yaml 路径（默认自动找 ../dataset_self/data.yaml）")
     p.add_argument("--epochs", type=int, default=None, help="训练轮数")
     p.add_argument("--imgsz", type=int, default=None, help="输入图片尺寸")
     p.add_argument("--batch", type=int, default=None, help="batch size")
@@ -42,12 +42,12 @@ def main():
 
     # ---- 数据集路径 ----
     data = args.data or os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "..", "dataset", "data.yaml"
+        os.path.dirname(os.path.abspath(__file__)), "..", "dataset_self", "data.yaml"
     )
     data = os.path.abspath(data)
     if not os.path.exists(data):
         print(f"[错误] 找不到 data.yaml: {data}")
-        print("请用 --data 指定正确路径，例如: python3 train.py --data /root/desktop6/data.yaml")
+        print("请用 --data 指定正确路径，例如: python3 train.py --data /root/dataset_XBY/data.yaml")
         return
 
     # ---- 设备 ----
