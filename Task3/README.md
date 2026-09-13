@@ -124,9 +124,9 @@ ros2 launch task3_vision task3_vision.launch.py \
 - 动作顺序是否包含 `SAFE_RAISE_CURRENT_HEADING`、`SAFE_NEUTRAL`、
   `SAFE_ROTATE_TO_OBJECT`、`TRANSFER_IN`、`ROTATE_J1`。
 
-## 8. 第一次低速空载运动
+## 8. 第一次低速单物体运动
 
-先移走物体和分类箱，保持急停可用：
+工作区只保留一个物体及对应分类箱，移走其他障碍物，保持急停可用：
 
 ```bash
 ros2 launch task3_vision task3_vision.launch.py \
