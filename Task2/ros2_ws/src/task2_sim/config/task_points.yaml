@@ -1,0 +1,222 @@
+home:
+  joints_deg:
+  - 0.0000
+  - 0.2154
+  - -20.4247
+  - 0.0000
+  - 110.2092
+  - 0.0000
+point_a:
+  x: 0.135
+  y: 0.075
+  z: 0.038
+grasp_offset_a:
+  # Strict-upright pickup calibration.
+  # Physical object A remains fixed.
+  x: 0.014
+  y: 0.004
+  z: -0.018
+
+point_b:
+  x: 0.143
+  y: -0.072
+  z: 0.028
+placement_offset_b:
+  x: 0.000
+  y: 0.000
+  z: 0.000
+
+safe_height:
+  z: 0.100
+motion:
+  simulation_speed_scale: 0.4
+
+  # Gazebo motion completion is verified from measured
+  # joint feedback instead of interpolation time alone.
+  simulation_joint_goal_tolerance_deg: 1.5
+  simulation_goal_stable_s: 0.10
+  simulation_motion_timeout_s: 3.0
+  simulation_feedback_max_age_s: 0.50
+  simulation_goal_log_period_s: 0.50
+
+  # Gazebo PID may retain a small steady-state error under gravity.
+  # At timeout, a residual error below this value is accepted with
+  # a warning instead of aborting the entire five-trial experiment.
+  simulation_timeout_acceptance_deg: 2.0
+
+  real_speed_scale: 0.2
+  # Real hardware motions are deliberately slower.
+  # Keeps consecutive commands below the 3 deg
+  # real-robot safety step limit.
+  real_motion_duration_scale: 1.5
+  home_duration_s: 1.5
+  approach_duration_s: 1.8
+  descend_duration_s: 0.9
+  lift_duration_s: 1.0
+  transfer_duration_s: 1.6
+  # Online resolved-rate Cartesian servo.
+  #
+  # No dense offline IK path is precomputed.
+  # Each 20 Hz control tick performs one local
+  # damped-least-squares Cartesian correction.
+  cartesian_servo_joint_step_deg: 1.0
+  cartesian_servo_position_tolerance_m: 0.006
+  cartesian_servo_orientation_tolerance_deg: 1.0
+  cartesian_servo_timeout_s: 3.0
+  # Hold the grasped object upright at safe height
+  # before beginning horizontal transport.
+  post_lift_hold_s: 0.0
+
+  # Wait after reaching A safe pose.
+  a_safe_hold_s: 0.0
+
+  # A_PREGRASP is now a stationary settling stage.
+  # No downward motion occurs here.
+  pregrasp_hold_s: 0.0
+gripper:
+  open_position: 0.0
+  closed_position: 0.0120
+  # Gazebo adaptive-linkage angles. Task-level open/close
+  # commands remain unchanged for sim/real compatibility.
+  simulation_open_angle_rad: 0.14
+  simulation_closed_angle_rad: -0.50
+  close_duration_s: 0.65
+  open_duration_s: 0.55
+experiment:
+  total_trials: 5
+  required_successes: 4
+kinematics:
+  # TCP length for the current myCobot Adaptive Gripper AG.
+  tool_offset_m: 0.090
+
+  # Unified grasp / transport orientation.
+  #
+  # roll  = 180 deg -> tool points vertically downward
+  # pitch =   0 deg -> no forward/backward tilt
+  # yaw   =  90 deg -> gripper edges parallel to cube edges
+  upright_tool_rpy_deg:
+  - 180.0
+  - 0.0
+  - -90.0
+
+  # Initial IK seed at A_PICK.
+  pick_seed_deg:
+  - 30.8510
+  - 46.1230
+  - -23.2850
+  - 0.0000
+  - 67.1613
+  - 30.8510
+
+  # Initial IK seed at B_PLACE.
+  place_seed_deg:
+  - -16.5821
+  - 52.3508
+  - -41.4833
+  - -13.9324
+  - 74.8277
+  - -13.4263
+
+  # Simulation-only A-side calibration.
+  #
+  # These overrides fix the Gazebo grasp alignment without
+  # modifying the already calibrated real-robot waypoints.
+  #
+  # All three poses share X≈0.149 m, Y≈0.079 m and keep the
+  # tool vertically downward.
+  #
+  # A_PICK is deliberately 30 mm lower than the previous
+  # simulation grasp pose.
+  simulation_upright_seed_deg:
+
+    a_safe:
+    - 28.7497
+    - 37.7950
+    - -52.9046
+    - 0.0000
+    - 105.1096
+    - 28.7497
+
+    a_pregrasp:
+    - 28.7497
+    - 34.4955
+    - -26.3157
+    - 0.0000
+    - 81.8202
+    - 28.7497
+
+    a_pick:
+    - 28.7497
+    - 49.6456
+    - -11.5157
+    - 0.0000
+    - 51.8700
+    - 28.7497
+
+  # Stable IK branches for the upright gripper.
+  #
+  # These remain the formal / real-robot calibrated poses.
+  upright_seed_deg:
+
+    a_pick:
+    - 30.8510
+    - 46.1230
+    - -23.2850
+    - 0.0000
+    - 67.1613
+    - 30.8510
+
+    a_pregrasp:
+    - 30.8510
+    - 40.9200
+    - -36.3800
+    - 0.0000
+    - 85.4608
+    - 30.8510
+
+    a_safe:
+    - 30.8510
+    - 49.8690
+    - -73.3070
+    - 0.0000
+    - 113.4385
+    - 30.8510
+
+    b_safe:
+    - -26.7251
+    - 40.0077
+    - -65.0077
+    - 0.0000
+    - 115.0000
+    - -26.7251
+
+    b_place:
+    - -26.7251
+    - 34.6830
+    - -14.6877
+    - 0.0000
+    - 70.0047
+    - -26.7251
+
+  solver:
+    maximum_iterations: 400
+    numerical_step_rad: 0.001
+    damping: 0.03
+    maximum_iteration_step_rad: 0.08
+acceptance:
+  settle_time_s: 1.0
+  placement_xy_tolerance_m: 0.045
+  simulation_object_center_z_m: 0.415
+  placement_z_tolerance_m: 0.008
+  maximum_tilt_deg: 8.0
+  object_pose_timeout_s: 1.0
+simulation_reset:
+  object_name: target_object
+  world_name: task2_world
+  point_a_world:
+    x: 0.135
+    y: 0.075
+    z:     0.415
+    roll: 0.0
+    pitch: 0.0
+    yaw: 0.0
