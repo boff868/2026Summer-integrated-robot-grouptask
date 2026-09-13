@@ -18,6 +18,8 @@ def test_task1_detection_topic_and_two_classes():
     assert config["camera"]["detections_topic"] == "/detections/json"
     assert config["classes"]["charger"]["region"] == "A"
     assert config["classes"]["staple_shell"]["region"] == "B"
+    assert config["classes"]["by_id"][0] == "A"
+    assert config["classes"]["by_id"][1] == "B"
 
 
 def test_tight_grip_and_safe_pose_within_limits():

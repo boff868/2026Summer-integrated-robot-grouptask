@@ -1,9 +1,11 @@
 """启动 Task3 真机视觉分拣节点。
 
-注意：本 launch 只拉起"分拣"这一侧。相机 + YOLO 检测节点是 Task1 的程序
-（chixin114514/2026Summer 的 Task1/xby.py），需要另外单独启动，例如：
+注意：本 launch 只拉起"分拣"这一侧。相机 + YOLO 检测节点是本仓库 Task1 的
+``ros2/yolo_detector_node.py``，需要另外单独启动，例如：
 
-    cd ~/2026Summer/Task1 && python3 xby.py --model best.pt --camera 2
+    cd ~/2026Summer-integrated-robot-grouptask/Task1
+    python3 ros2/yolo_detector_node.py --ros-args \
+      -p model_path:=models/best_gjs_1.pt -p camera_id:=2
 
 然后：
 
@@ -26,8 +28,8 @@ def generate_launch_description():
             "calibration_file", default_value="~/.ros/task3_table_calibration.yaml",
             description="桌面标定文件，由 calibrate_table 生成"),
         DeclareLaunchArgument(
-            "dry_run", default_value="false",
-            description="true = 只解算并打印，不让机械臂动"),
+            "dry_run", default_value="true",
+            description="默认 true 只解算；真机确认后必须明确传 false"),
         DeclareLaunchArgument(
             "arm_speed_percent", default_value="0",
             description="关节速度百分比，0 = 用配置文件里的值"),

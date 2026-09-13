@@ -1,6 +1,6 @@
 """订阅 Task1 的 YOLO 检测结果并保留最新一帧。
 
-话题：``/yolo/detections``，类型 ``std_msgs/msg/String``，内容是 JSON：
+话题：``/detections/json``，类型 ``std_msgs/msg/String``，内容是 JSON：
 
     {"fps": 8.7, "object_count": 2,
      "objects": [{"class_id": 0, "class_name": "charger", "confidence": 0.91,
@@ -26,7 +26,7 @@ class DetectionListener(Node):
     def __init__(self, config):
         super().__init__("task3_vision_detector")
         camera = config["camera"]
-        topic = str(camera.get("detections_topic", "/yolo/detections"))
+        topic = str(camera.get("detections_topic", "/detections/json"))
 
         self._lock = threading.Lock()
         self._stamp = 0.0

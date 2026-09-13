@@ -17,7 +17,7 @@ J1 / J4 / J6 固定不参与解算：
     这个 3x3 只依赖 J J^T，秩亏时也不会爆；因为误差 e 落在 J 的行空间里，
     零空间方向不会被激励。再叠加一个零空间姿态偏置，避免关节沿零空间漂走。
 
-正运动学直接用 task3_six_sim.kinematics（和仿真里标定过的模型是同一份）。
+正运动学直接使用本包内置的 kinematics（与仿真里标定过的模型是同一份）。
 纯 Python，不需要 numpy。
 """
 
@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import math
 
-from task3_six_sim import kinematics
+from . import kinematics
 
 # 有限差分求雅可比时的关节扰动（度）
 _JACOBIAN_STEP_DEG = 0.5

@@ -6,12 +6,12 @@
     张开夹爪 -> 抬到上方 -> 下降 -> 夹到最紧 -> 抬起
     -> 固定其他关节、只把 J1 转到落料方位 -> 到落料位上方 -> 下降 -> 松开 -> 退回
 
-按用户明确要求：**没有任何"失败就中止"的设置**。读不到角度、等超时、IK 残差
-偏大、类别没配、发送异常——全部只记日志然后继续，一轮做完为止。
+真机安全策略：一个目标只要出现 IK 不可达、关节超限、发送失败或未到位，就停止
+这个目标的后续动作并尝试回到高位；绝不在位置未知时继续下降或闭合夹爪。
 
 运行：
-    ros2 run task3_vision vision_sort --ros-args -p dry_run:=true   # 只算不动
-    ros2 run task3_vision vision_sort                               # 真跑
+    ros2 run task3_vision vision_sort                               # 默认只算不动
+    ros2 run task3_vision vision_sort --ros-args -p dry_run:=false  # 明确确认后真跑
 """
 
 from __future__ import annotations
@@ -61,7 +61,8 @@ class VisionSortNode(Node):
         self.declare_parameter("calibration_file", "~/.ros/task3_table_calibration.yaml")
         self.declare_parameter("max_objects", 0)
         self.declare_parameter("passes", 0)
-        self.declare_parameter("dry_run", False)
+        # 默认只做解算。真机运动必须在命令行明确写 dry_run:=false。
+        self.declare_parameter("dry_run", True)
         self.declare_parameter("arm_speed_percent", 0)
 
         config_path = self.get_parameter("config").value
@@ -75,6 +76,7 @@ class VisionSortNode(Node):
         self.camera_conf = self.config.get("camera", {}) or {}
         self.geometry = self.config.get("geometry", {}) or {}
         self.limits = self.config.get("limits", {}) or {}
+        self.safety = self.config.get("safety", {}) or {}
         self.classes = self.config.get("classes", {}) or {}
         self.regions = self.config.get("regions", {}) or {}
         self.run_conf = self.config.get("run", {}) or {}
@@ -102,6 +104,11 @@ class VisionSortNode(Node):
         self.pick_offset = (float(pick_offset[0]), float(pick_offset[1]))
         self.ik_seed = [float(v) for v in
                         (self.geometry.get("ik_seed_q") or [54.76, -14.71, 51.36])]
+        safe = self.geometry.get("rotation_safe_joints_deg") \
+            or [0.0, 49.8690, -73.3070, 0.0, 113.4385, 0.0]
+        if len(safe) != 6:
+            raise ValueError("geometry.rotation_safe_joints_deg 必须正好有 6 个关节角")
+        self.rotation_safe = [float(v) for v in safe]
 
         lower = self.limits.get("lower") or [-160.0, -75.0, -175.0, -155.0, -115.0, -180.0]
         upper = self.limits.get("upper") or [160.0, 120.0, 65.0, 155.0, 115.0, 180.0]
@@ -111,9 +118,15 @@ class VisionSortNode(Node):
         self.image_size = tuple(self.camera_conf.get("image_size", [640, 480]))
         self.max_age_s = float(self.camera_conf.get("max_age_s", 2.0))
         self.confirm_frames = int(self.camera_conf.get("confirm_frames", 2))
+        self.stable_pixel_tolerance = float(
+            self.camera_conf.get("stable_pixel_tolerance_px", 8.0))
         self.min_confidence = float(self.camera_conf.get("min_confidence", 0.0))
         pixel_offset = self.camera_conf.get("pixel_offset", [0.0, 0.0]) or [0.0, 0.0]
         self.pixel_offset = (float(pixel_offset[0]), float(pixel_offset[1]))
+        self.max_ik_residual = float(self.safety.get("max_ik_residual_m", 0.005))
+        radius_limits = self.safety.get("workspace_radius_m", [0.095, 0.255])
+        self.min_radius = float(radius_limits[0])
+        self.max_radius = float(radius_limits[1])
 
         # 标定
         self.calibration_file = _expand(self.get_parameter("calibration_file").value)
@@ -187,23 +200,18 @@ class VisionSortNode(Node):
 
     # ------------------------------------------------------------------
     def _region_for(self, item):
-        """按类别名找落料区；名字对不上再按 class_id 兜底。
-
-        兜底表的键一定要先规范化成字符串再查：YAML 里写 ``0:`` / ``1:`` 会被
-        解析成**整数**键，而 class_id 也可能以字符串形式过来。只按一种形式查
-        会让兜底静默失效（踩过一次：配置里明明写了 by_id，却完全没生效）。
-        """
+        """按类别名找落料区；名字对不上再按 class_id 兜底。"""
         entry = self.classes.get(item["class_name"])
         if isinstance(entry, dict) and entry.get("region") in self.regions:
             return str(entry["region"])
-
-        by_id = {
-            str(key): value
-            for key, value in (self.classes.get("by_id") or {}).items()
-        }
-        fallback = by_id.get(str(item["class_id"]))
-        if fallback is not None and str(fallback) in self.regions:
-            return str(fallback)
+        by_id = self.classes.get("by_id") or {}
+        # PyYAML 会把未加引号的 0/1 解析为整数键；同时兼容字符串键。
+        class_id = item["class_id"]
+        key = class_id if class_id in by_id else str(class_id)
+        if key in by_id:
+            fallback = str(by_id[key])
+            if fallback in self.regions:
+                return fallback
         return None
 
     def _inside_any_region(self, x, y):
@@ -252,13 +260,6 @@ class VisionSortNode(Node):
             point = homography_module.project(self.homography, pixel[0], pixel[1])
             if point is None:
                 continue
-            x = point[0] + self.pick_offset[0]
-            y = point[1] + self.pick_offset[1]
-            if self._inside_any_region(x, y):
-                continue                                    # 已经放进落料区了
-            if any(math.hypot(x - ax, y - ay) < SAME_TARGET_RADIUS_M
-                   for ax, ay in self.attempted):
-                continue                                    # 刚抓过，别重复抓
             region = self._region_for(item)
             if region is None:
                 # 类别名没配就跳过，但要明确告诉用户实际见到的名字是什么，
@@ -273,30 +274,62 @@ class VisionSortNode(Node):
                         f"相机到目前为止报过的名字 = {self.detector.seen_names()}"
                     )
                 continue
+
+            class_conf = self.classes.get(item["class_name"])
+            class_conf = class_conf if isinstance(class_conf, dict) else {}
+            class_offset = class_conf.get("pick_xy_offset", [0.0, 0.0]) or [0.0, 0.0]
+            x = point[0] + self.pick_offset[0] + float(class_offset[0])
+            y = point[1] + self.pick_offset[1] + float(class_offset[1])
+            radius = math.hypot(x, y)
+            if not self.min_radius <= radius <= self.max_radius:
+                self.get_logger().warn(
+                    f"跳过 {item['class_name']}: 半径 {radius:.3f}m 超出工作范围 "
+                    f"[{self.min_radius:.3f}, {self.max_radius:.3f}]m")
+                continue
+            if self._inside_any_region(x, y):
+                continue                                    # 已经放进落料区了
+            if any(math.hypot(x - ax, y - ay) < SAME_TARGET_RADIUS_M
+                   for ax, ay in self.attempted):
+                continue                                    # 刚抓过，别重复抓
+            pick_z = float(class_conf.get("pick_pad_z_m", self.pick_pad_z))
             found.append({
                 "item": item, "x": x, "y": y, "region": region,
-                "radius": math.hypot(x, y),
+                "radius": radius, "pick_z": pick_z,
                 "pixel": pixel,
             })
         found.sort(key=lambda candidate: candidate["radius"])
         return found
 
+    def _same_scene(self, previous, current):
+        """类别相同且对应框中心移动不超过阈值，才算同一个稳定画面。"""
+        if previous is None or len(previous) != len(current):
+            return False
+        key = lambda item: (item["class_id"], item["u"], item["v"])
+        left = sorted(previous, key=key)
+        right = sorted(current, key=key)
+        for old, new in zip(left, right):
+            if old["class_id"] != new["class_id"]:
+                return False
+            if math.hypot(old["u"] - new["u"], old["v"] - new["v"]) \
+                    > self.stable_pixel_tolerance:
+                return False
+        return True
+
     def _wait_for_scene(self, timeout_s=10.0):
-        """等连续几帧目标数一致，避免在检测抖动时下手。这不是中止，只是等。"""
-        last_count = None
+        """等连续多帧类别和位置都稳定，避免检测框抖动时下手。"""
+        previous = None
         stable = 0
         deadline = time.monotonic() + timeout_s
         while time.monotonic() < deadline:
             _frames, _stamp, objects = self.detector.snapshot(self.max_age_s)
             if objects is not None:
-                count = len(objects)
-                if count == last_count:
+                if self._same_scene(previous, objects):
                     stable += 1
                     if stable >= self.confirm_frames:
                         return True
                 else:
-                    last_count = count
                     stable = 0
+                previous = objects
             time.sleep(0.15)
         return False
 
@@ -314,17 +347,18 @@ class VisionSortNode(Node):
         object_j1 = math.degrees(math.atan2(oy, ox))
         bin_j1 = math.degrees(math.atan2(by, bx))
 
-        pick_z = self.pick_pad_z
+        pick_z = float(target.get("pick_z", self.pick_pad_z))
         place_z = self.place_pad_z
         above_z = pick_z + self.above_offset
         pre_z = pick_z + self.pre_pick_offset
         transfer_z = pick_z + self.transfer_offset
 
-        def step(stage, x, y, z, solve_j1, command_j1=None, action=None, move=True):
+        def step(stage, x, y, z, solve_j1, command_j1=None, action=None,
+                 move=True, rotate_only=False):
             return {"stage": stage, "x": x, "y": y, "z": z,
                     "solve_j1": solve_j1,
                     "command_j1": solve_j1 if command_j1 is None else command_j1,
-                    "action": action, "move": move}
+                    "action": action, "move": move, "rotate_only": rotate_only}
 
         return [
             # 先在原地把夹爪张开，然后飞到目标上方（高处走，不贴着桌面横穿）
@@ -338,39 +372,100 @@ class VisionSortNode(Node):
             step("LIFT", ox, oy, above_z, object_j1),
             step("TRANSFER_IN", ox, oy, transfer_z, object_j1),
             # 你说的那一步：其他关节不动，只把 J1 转到落料方位
-            step("ROTATE_J1", ox, oy, transfer_z, object_j1, command_j1=bin_j1),
+            step("ROTATE_J1", ox, oy, transfer_z, object_j1,
+                 command_j1=bin_j1, rotate_only=True),
             step("BIN_ABOVE", bx, by, place_z + self.above_offset, bin_j1),
             step("BIN_PLACE", bx, by, place_z, bin_j1, action="open"),
             step("BIN_RETREAT", bx, by, place_z + self.above_offset, bin_j1),
         ]
 
-    def _clamp(self, arm_deg):
-        out = []
+    def _validate_joints(self, arm_deg, stage):
+        """超限必须拒绝动作；截断角度会改变末端位置，真机上不可接受。"""
         for index, value in enumerate(arm_deg):
             low, high = self.lower[index], self.upper[index]
             if value < low or value > high:
-                self.get_logger().warn(
+                self.get_logger().error(
                     f"J{index + 1}={value:.2f} 超出限位 [{low:.0f}, {high:.0f}]，"
-                    f"截断后继续"
+                    f"拒绝执行 {stage}"
                 )
-                value = max(low, min(high, value))
-            out.append(value)
-        return out
+                return False
+        return True
+
+    def _safe_pose(self, heading_deg=0.0):
+        pose = list(self.rotation_safe)
+        pose[0] = float(heading_deg)
+        pose[5] = float(heading_deg)
+        return pose
+
+    def _prepare_pick(self, target, label):
+        """先收拢抬高，再只转 J1/J6；避免 HOME 直接插值到目标时末端下坠。"""
+        heading = math.degrees(math.atan2(target["y"], target["x"]))
+        neutral = self._safe_pose(0.0)
+        aligned = self._safe_pose(heading)
+        if not self._validate_joints(neutral, "SAFE_NEUTRAL") \
+                or not self._validate_joints(aligned, "SAFE_ROTATE_TO_OBJECT"):
+            return False
+        if self.dry_run:
+            self._log("step", label=label, stage="SAFE_RAISE_CURRENT_HEADING",
+                      joint_deg=neutral, dry_run=True)
+            self._log("step", label=label, stage="SAFE_NEUTRAL",
+                      joint_deg=neutral, dry_run=True)
+            self._log("step", label=label, stage="SAFE_ROTATE_TO_OBJECT",
+                      joint_deg=aligned, dry_run=True)
+            return True
+
+        measured = self.arm.measured_deg()
+        if measured is None:
+            self.get_logger().error(f"{label}: 进入抓取前读不到关节角，停止")
+            return False
+        # 第一步保持当前 J1 方位不变，只收拢/抬高；确认到位后才允许底座旋转。
+        raised = self._safe_pose(measured[0])
+        if not self._validate_joints(raised, "SAFE_RAISE_CURRENT_HEADING"):
+            return False
+        if not self.arm.move(raised, f"{label}/SAFE_RAISE_CURRENT_HEADING"):
+            return False
+        # raised、neutral、aligned 之间只有 J1/J6 不同，旋转时高度不会下降。
+        if not self.arm.move(neutral, f"{label}/SAFE_NEUTRAL"):
+            return False
+        return self.arm.move(aligned, f"{label}/SAFE_ROTATE_TO_OBJECT")
+
+    def _recover_high(self, label):
+        """当前物体失败后，保持当前底座方向先抬高收拢，再回中位。"""
+        if self.dry_run:
+            return
+        measured = self.arm.measured_deg()
+        if measured is None:
+            self.get_logger().error(f"{label}: 无关节反馈，禁止自动恢复")
+            return
+        raised = self._safe_pose(measured[0])
+        if self.arm.move(raised, f"{label}/RECOVER_RAISE"):
+            self.arm.move(self._safe_pose(0.0), f"{label}/RECOVER_NEUTRAL")
 
     def _execute(self, plan, label):
-        """跑完整个动作序列。每一步失败都只记录，不返回、不中止。"""
+        """执行单个物体；任一步失败就停止该物体，绝不继续下降或夹取。"""
         seed = list(self.ik_seed)
+        last_arm_deg = None
         for index, step in enumerate(plan):
             arm_deg = None
             if step["move"]:
-                q, residual = ik.solve(
-                    (step["x"], step["y"], step["z"]), seed, step["solve_j1"],
-                    j4_deg=self.j4, grip_rad=self.grip_rad, base_z=self.base_z,
-                )
-                seed = list(q)
-                arm_deg = self._clamp([
-                    step["command_j1"], q[0], q[1], self.j4, q[2], step["command_j1"],
-                ])
+                if step.get("rotate_only"):
+                    if last_arm_deg is None:
+                        self.get_logger().error(f"{label}: 没有上一姿态，无法安全旋转")
+                        return False
+                    arm_deg = list(last_arm_deg)
+                    arm_deg[0] = float(step["command_j1"])
+                    arm_deg[5] = float(step["command_j1"])
+                    residual = 0.0
+                else:
+                    q, residual = ik.solve(
+                        (step["x"], step["y"], step["z"]), seed, step["solve_j1"],
+                        j4_deg=self.j4, grip_rad=self.grip_rad, base_z=self.base_z,
+                    )
+                    seed = list(q)
+                    arm_deg = [
+                        step["command_j1"], q[0], q[1], self.j4,
+                        q[2], step["command_j1"],
+                    ]
                 self._log(
                     "step", label=label, stage=step["stage"], index=index + 1,
                     target_xyz=[round(step["x"], 4), round(step["y"], 4),
@@ -380,13 +475,17 @@ class VisionSortNode(Node):
                     ik_residual_mm=round(residual * 1000, 3),
                     action=step["action"], dry_run=self.dry_run,
                 )
-                if residual > ik.CONVERGED_M:
-                    self.get_logger().warn(
-                        f"{label} {step['stage']}: IK 残差 {residual * 1000:.2f}mm 偏大"
-                        f"（够不到或接近奇异），仍然继续执行"
-                    )
-                if not self.dry_run:
-                    self.arm.move(arm_deg, f"{label}/{step['stage']}")
+                if residual > self.max_ik_residual:
+                    self.get_logger().error(
+                        f"{label} {step['stage']}: IK 残差 {residual * 1000:.2f}mm "
+                        f"超过 {self.max_ik_residual * 1000:.1f}mm，停止当前物体")
+                    return False
+                if not self._validate_joints(arm_deg, step["stage"]):
+                    return False
+                if not self.dry_run \
+                        and not self.arm.move(arm_deg, f"{label}/{step['stage']}"):
+                    return False
+                last_arm_deg = list(arm_deg)
             else:
                 self._log("step", label=label, stage=step["stage"],
                           index=index + 1, action=step["action"],
@@ -394,11 +493,14 @@ class VisionSortNode(Node):
 
             # 夹爪动作一定在移动到位之后
             if step["action"] == "open" and not self.dry_run:
-                self.arm.open_gripper()
+                if not self.arm.open_gripper():
+                    return False
             elif step["action"] == "close" and not self.dry_run:
-                self.arm.close_gripper()
+                if not self.arm.close_gripper():
+                    return False
 
             time.sleep(float(self.run_conf.get("step_pause_s", 0.2)))
+        return True
 
     # ------------------------------------------------------------------
     def _connect_with_retry(self):
@@ -419,14 +521,18 @@ class VisionSortNode(Node):
     def run(self):
         """主流程：等标定 -> 连接机械臂 -> 一个物体一个物体地分拣。"""
         self._wait_for_calibration()
-        if not self._connect_with_retry():
+        if not self.dry_run and not self._connect_with_retry():
             return
 
         startup_home = self.run_conf.get("startup_home", True)
         home = self.run_conf.get("home")
         if startup_home and home and len(home) == 6 and not self.dry_run:
-            self.arm.open_gripper()
-            self.arm.move([float(v) for v in home], "STARTUP_HOME")
+            if not self.arm.open_gripper():
+                self.get_logger().error("夹爪初始化失败，停止分拣")
+                return
+            if not self.arm.move([float(v) for v in home], "STARTUP_HOME"):
+                self.get_logger().error("HOME 未到位，停止分拣")
+                return
 
         for pass_index in range(1, max(1, self.passes) + 1):
             self.get_logger().info(f"===== 第 {pass_index}/{self.passes} 轮 =====")
@@ -465,16 +571,24 @@ class VisionSortNode(Node):
                     "plan", label=label,
                     stages=[item["stage"] for item in plan],
                 )
+                success = False
                 try:
-                    self._execute(plan, label)
-                except Exception as error:            # noqa: BLE001 - 绝不中止整轮
-                    self.get_logger().warn(f"{label} 执行过程出错（继续下一个）: {error}")
+                    if self._prepare_pick(target, label):
+                        success = self._execute(plan, label)
+                except Exception as error:            # noqa: BLE001
+                    self.get_logger().error(f"{label} 执行过程出错: {error}")
 
                 self.attempted.append((target["x"], target["y"]))
-                self._log("place", label=label, region=target["region"],
-                          slot=[round(slot[0], 4), round(slot[1], 4)])
-                completed += 1
-                self.get_logger().info(f"已处理 {completed}/{self.max_objects}: {label}")
+                if success:
+                    self._log("place", label=label, region=target["region"],
+                              slot=[round(slot[0], 4), round(slot[1], 4)])
+                    completed += 1
+                    self.get_logger().info(
+                        f"已处理 {completed}/{self.max_objects}: {label}")
+                else:
+                    self._log("failure", label=label, reason="motion_or_gripper_failed")
+                    self.get_logger().error(f"{label} 未完成，停止该物体并尝试回高位")
+                    self._recover_high(label)
 
             self._log("result", pass_index=pass_index, handled=completed,
                       attempted=len(self.attempted))
