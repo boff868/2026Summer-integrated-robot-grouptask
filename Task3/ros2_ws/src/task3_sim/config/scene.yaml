@@ -1,0 +1,31 @@
+table:
+  size: [0.80, 0.70, 0.40]
+  top_z: 0.4
+arm: [0.0, 0.0]
+grids:
+  P1: [0.141018, 0.072702]
+  P2: [0.08037, -0.12506]
+  P3: [-0.08037, 0.12506]
+  # Exact 180-degree rotation of the Gazebo-validated P1 pickup centre.
+  P4: [-0.141018, -0.072702]
+bins:
+  BIN_A: [0.135229, -0.036238]
+  # Same radius and joint geometry as BIN_A at a -100-degree bearing.  This
+  # keeps the loaded P4->BIN_B transfer to 47 degrees instead of crossing the
+  # full -147..+155 numeric joint range and dropping the object mid-swing.
+  BIN_B: [-0.024314, -0.137873]
+objects:
+  orange_battery:
+    model: orange_battery_1
+    grid: P1
+    bin: BIN_A
+  green_can:
+    model: green_can_1
+    grid: P4
+    bin: BIN_B
+camera:
+  topic: /task3/camera/image_raw
+  pose: [0.0, 0.0, 1.35, 0.0, 1.5708, 0.0]
+  image_size: [640, 480]
+  update_rate: 30
+  horizontal_fov: 1.05
