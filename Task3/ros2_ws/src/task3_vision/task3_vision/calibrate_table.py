@@ -1,6 +1,6 @@
 """桌面标定：把 YOLO 的像素坐标标成机械臂桌面坐标。
 
-先在 Jetson 上把 Task1 的 YOLO 节点跑起来（它发布 /detections/json），
+先在 Jetson 上把 Task1 的 YOLO 节点跑起来（它发布 /yolo/detections），
 另开一个终端跑本节点：
 
     ros2 run task3_vision calibrate_table
@@ -31,7 +31,6 @@ from pathlib import Path
 
 import rclpy
 import yaml
-from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
 
 # 允许 `python3 calibrate_table.py` 直接跑（源码目录里没有安装好的包）
@@ -42,12 +41,11 @@ from task3_vision.detector import DetectionListener               # noqa: E402
 
 
 def _load_config():
-    path = (Path(get_package_share_directory("task3_vision"))
-            / "config" / "vision_config.yaml")
+    path = (Path(__file__).resolve().parent / "config" / "vision_config.yaml")
     if path.exists():
         with path.open("r", encoding="utf-8") as handle:
             return yaml.safe_load(handle) or {}
-    return {"camera": {"detections_topic": "/detections/json", "max_age_s": 2.0}}
+    return {"camera": {"detections_topic": "/yolo/detections", "max_age_s": 2.0}}
 
 
 class CalibrateNode(Node):

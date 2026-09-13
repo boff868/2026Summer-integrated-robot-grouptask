@@ -12,10 +12,11 @@
 
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
-  <depend>ament_index_python</depend>
   <depend>python3-yaml</depend>
 
-  <!-- 正运动学已内置在本包，真机运行不依赖整套 Gazebo 仿真包。 -->
+  <!-- 复用 task3_six_sim 的正运动学（kinematics.pad_mid），
+       保证解算和仿真里标定过的模型完全一致。 -->
+  <exec_depend>task3_six_sim</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
 
