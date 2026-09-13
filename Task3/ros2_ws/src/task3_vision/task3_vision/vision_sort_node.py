@@ -123,6 +123,7 @@ class VisionSortNode(Node):
         # 落料槽位占用情况（只在本次运行内有效）
         self.slot_used = {name: set() for name in self.regions}
         self.attempted = []
+        self._unmapped_warned = set()
 
         self.log_path = _expand(self.run_conf.get("log_path", "~/.ros/task3_vision_sort.jsonl"))
         self.arm = RealArm(self.config, self.get_logger())
@@ -252,7 +253,18 @@ class VisionSortNode(Node):
                 continue                                    # 刚抓过，别重复抓
             region = self._region_for(item)
             if region is None:
-                continue                                    # 类别没配，跳过
+                # 类别名没配就跳过，但要明确告诉用户实际见到的名字是什么，
+                # 否则他没法知道该往 vision_config.yaml 里填什么。
+                name = item["class_name"]
+                if name not in self._unmapped_warned:
+                    self._unmapped_warned.add(name)
+                    self.get_logger().error(
+                        f"类别 '{name}'（class_id={item['class_id']}）没有配置落料区，"
+                        f"跳过。请在 vision_config.yaml 的 classes: 里加上它。"
+                        f"目前配的名字 = {sorted(k for k in self.classes if k != 'by_id')}；"
+                        f"相机到目前为止报过的名字 = {self.detector.seen_names()}"
+                    )
+                continue
             found.append({
                 "item": item, "x": x, "y": y, "region": region,
                 "radius": math.hypot(x, y),
