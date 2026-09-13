@@ -27,15 +27,16 @@ robot:
   # 一次 send_angles 之后，等六个关节都进入容差并稳定多久算到位
   arrival_tolerance_deg: 3.0
   arrival_stable_s: 0.4
-  arrival_timeout_s: 25.0       # 超时只记录日志，不中止
+  arrival_timeout_s: 25.0       # 超时后停止当前物体，禁止盲目执行下一步
   poll_period_s: 0.2
 
 camera:
-  # Task1 的 xby.py 发布的话题（std_msgs/String, JSON）
-  detections_topic: "/yolo/detections"
+  # 你自己仓库 Task1/ros2/yolo_detector_node.py 的实际发布话题
+  detections_topic: "/detections/json"
   image_size: [640, 480]
-  # 连续几帧目标数一致才动手（相机 5~8 FPS，2 帧足够）
-  confirm_frames: 2
+  # 连续多帧类别和位置都稳定才动手，不能只比较目标数量
+  confirm_frames: 4
+  stable_pixel_tolerance_px: 8.0
   # 检测结果超过这个时间算过期
   max_age_s: 2.0
   # 低于这个置信度不抓
@@ -63,6 +64,10 @@ geometry:
   pre_pick_offset_m: 0.030 # 抓取前悬停量
   transfer_offset_m: 0.170 # 抬起转运高度
 
+  # 从 HOME 出发先进入这个收拢高位姿态，再只转 J1/J6 对准目标。
+  # 取自 Task2 已验证的 A_SAFE 构型，并把底座/腕部朝向归零。
+  rotation_safe_joints_deg: [0.0, 49.8690, -73.3070, 0.0, 113.4385, 0.0]
+
   # 目标中心的手动 XY 微调（米）。如果发现总是偏同一个方向，改这里。
   pick_xy_offset: [0.0, 0.0]
 
@@ -78,16 +83,26 @@ limits:
   lower: [-160.0, -75.0, -175.0, -155.0, -115.0, -180.0]
   upper: [160.0, 120.0, 65.0, 155.0, 115.0, 180.0]
 
+safety:
+  # IK 残差超过 5 mm 就拒绝执行，和 Task2 safety.yaml 一致。
+  max_ik_residual_m: 0.005
+  # 机械臂底座到目标中心的允许半径；超出就跳过，单位米。
+  workspace_radius_m: [0.095, 0.255]
+
 # ---------------------------------------------------------------------
 # 类别 -> 落料区
-# key 必须和 /yolo/detections 里 class_name 一字不差（注意大小写）
+# key 必须和 /detections/json 里 class_name 一字不差（注意大小写）
 # 启动时节点会打印它实际见到过的类别名，对不上就照着改
 # ---------------------------------------------------------------------
 classes:
   charger:
     region: A
+    pick_pad_z_m: 0.026
+    pick_xy_offset: [0.0, 0.0]
   staple_shell:
     region: B
+    pick_pad_z_m: 0.026
+    pick_xy_offset: [0.0, 0.0]
 
   # 名字对不上时的兜底：按 class_id 分
   by_id:
