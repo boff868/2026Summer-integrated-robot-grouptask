@@ -1,0 +1,35 @@
+MIT VNAV Lab 3 — Deliverable 1
+Quaternion transformations in ROS 1 / Noetic
+
+A. Message vs. tf2
+
+1. Convert an incoming geometry_msgs quaternion into an existing tf2 quaternion:
+   tf2::fromMsg(quat_msg, quat_tf);
+
+2. Convert a tf2 quaternion into a newly declared geometry_msgs quaternion:
+   geometry_msgs::Quaternion quat_msg = tf2::toMsg(quat_tf);
+
+3. Read the scalar (w) component of a tf2::Quaternion:
+   quat_tf.getW();
+
+B. Conversion
+
+1. Extract yaw from tf2::Quaternion quat_t in one function call:
+   const double yaw = tf2::getYaw(quat_t);
+
+2. Convert geometry_msgs::Quaternion to an Eigen 3-by-3 rotation matrix:
+   Eigen::Quaterniond q;
+   tf2::fromMsg(quat_msg, q);
+   const Eigen::Matrix3d R = q.toRotationMatrix();
+
+   The first call converts the ROS message to an Eigen quaternion; the second
+   obtains its rotation matrix. In a ROS 1 Noetic source file, include the
+   tf2_geometry_msgs and tf2_eigen conversion headers as needed.
+
+References
+- ROS Noetic tf2 Quaternion API:
+  https://docs.ros.org/en/noetic/api/tf2/html/
+- ROS tf2_eigen conversions (geometry_msgs::Quaternion <-> Eigen::Quaterniond):
+  https://docs.ros.org/en/lunar/api/tf2_eigen/html/tf2__eigen_8h_source.html
+- Eigen Quaternion::toRotationMatrix():
+  https://eigen.tuxfamily.org/dox/classEigen_1_1Quaternion.html
