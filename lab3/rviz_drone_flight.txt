@@ -1,0 +1,6 @@
+公开视频链接：
+https://github.com/boff868/2026Summer-integrated-robot-grouptask/blob/lab3/lab3/rviz_circle_tracking.mp4
+
+本地视频文件：rviz_circle_tracking.mp4
+
+此 GitHub 仓库及 lab3 分支为公开状态，可通过上方链接查看视频。MIT 实验原要求使用 Google Drive 或 Dropbox 分享链接；如课程提交系统严格要求这两种网盘，请将同一 MP4 上传到网盘并替换本链接。

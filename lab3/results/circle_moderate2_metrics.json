@@ -1,0 +1,47 @@
+{
+  "bag": "circle_moderate2.bag",
+  "state_samples": 2274,
+  "desired_samples": 3184,
+  "rotor_samples": 3013,
+  "start_time_s": 258.02,
+  "end_time_s": 304.4,
+  "duration_s": 46.38,
+  "runs": [
+    {
+      "label": "all",
+      "samples": 2274,
+      "duration_s": 46.38,
+      "rmse_x_m": 0.4808,
+      "rmse_y_m": 0.3457,
+      "rmse_z_m": 0.2861,
+      "rmse_xy_m": 0.5921,
+      "rmse_3d_m": 0.6577,
+      "max_error_3d_m": 2.1573,
+      "mean_z_error_m": -0.138
+    },
+    {
+      "label": "after_5s",
+      "samples": 2020,
+      "duration_s": 41.22,
+      "rmse_x_m": 0.5022,
+      "rmse_y_m": 0.3506,
+      "rmse_z_m": 0.3034,
+      "rmse_xy_m": 0.6124,
+      "rmse_3d_m": 0.6835,
+      "max_error_3d_m": 2.1573,
+      "mean_z_error_m": -0.1579
+    },
+    {
+      "label": "last_reference_period",
+      "samples": 608,
+      "duration_s": 12.56,
+      "rmse_x_m": 0.65,
+      "rmse_y_m": 0.3519,
+      "rmse_z_m": 0.2567,
+      "rmse_xy_m": 0.7391,
+      "rmse_3d_m": 0.7824,
+      "max_error_3d_m": 2.1573,
+      "mean_z_error_m": -0.164
+    }
+  ]
+}
